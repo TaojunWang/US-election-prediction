@@ -1,0 +1,191 @@
+---
+title: "2020 US presidential election prediction"
+author: "Taojun Wang"
+date: "2020/11/1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(haven)
+library(tidyverse)
+library(dplyr)
+library(broom) 
+library(here)
+library(plyr)
+library(scales)
+```
+# Abstract
+This report is aimed to predict the result of 2020 US presidential election. We use multilevel regression of post-stratification to process the survey day from nearly 7000 participants and build a logistic model based on it. We use the model to deal with the US census data, and find that the election is very close (Trump is expected to get 49%-52% of all votes).
+
+# Background Introduction:
+  Forecasting the US presidential elections is always a meaningful endeavor owing to America's important status in the world. Therefore, every election period in the country does not only attracts domestic but also international attention. In 2016, Donald Trump made an inconceivable triumph in the election when most polls and statistical analysis considered him as an underdog, and people want to know whether Joe Biden could beat him this time. In this case, through understanding the performance and opinions of the general public, it would be possible to determine the candidate that is most likely to win the elections. This report is based on evaluating and presenting a forecast on the candidate that will win the 2020 elections.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+setwd('C:/Users/wangt/Desktop/sta304/ps4/draft/forecasting')
+raw_data <- read_dta("inputs/data/ns20200625.dta")
+raw_data <- labelled::to_factor(raw_data)
+reduced_data <- raw_data %>% select(vote_2020, gender, race_ethnicity,education, age)
+raw_data2 <- read_dta("inputs/data/usa_00001.dta"
+)
+raw_data2 <- labelled::to_factor(raw_data2)
+reduced_data2 <- raw_data2 %>% select(sex, age, race, educ)
+varcount1 <-count(raw_data$vote_2016)
+ggplot(varcount1,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("2016 election")
+varcount2 <-count(raw_data$vote_2020)
+ggplot(varcount2, aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("2020 election survey")
+raw_data %>% ggplot(aes(x=age))+geom_histogram(bins = 100, colour = "black", fill = "grey")+ labs(title = "Age of participants in the survey")
+table(raw_data$race_ethnicity)
+table(raw_data$education)
+raw_data %>% ggplot(aes(x=gender))+geom_bar()+labs(title = "Gender of participants in the survey")
+```
+# Survey Data
+The data analysis of this report will be based on the survey data collected by Democracy Fund and UCLA Nationscape from 6479 participants. The data was collected through 24 weeks in the first half of 2020 fielded by a market research platform called Lucid (Nationscape Data Set, September 2020). The full data set includes 265 variables, and five of them will be taken into consideration in this report to simplify our analysis . The variable vote_2020 will be used as the response variable, which is the candidates participants claim to vote for in the survey. The predictor variables in use will include age, gender, race ethnicity and education level. 
+  It is obvious to find that among the participants people who plan to vote for Biden are more than that who plan to Trump. In terms of participants' age, the plot show a bi-modal characteristics, whether most people are around 40 or 60. Also, most participants have a relatively high education level, half of whom have completed college degree (or higher), which might not be very representative for the entire population. Therefore, this report plans to use multilevel regression with post-stratification (MRP) to predict the final election.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+rm(raw_data)
+rm(raw_data2)
+reduced_data2 <- reduced_data2 %>% filter(as.numeric(age)>17)
+reduced_data2 <- reduced_data2 %>% mutate(age_group=ifelse(as.numeric(age)<35,yes = "18to34",no=ifelse(as.numeric(age)<51,yes="35to50",no=ifelse(as.numeric(age)<66,yes="51to65",no="66to97"))))
+reduced_data2 <- subset(reduced_data2,select=-age)
+reduced_data2$race <- as.character(reduced_data2$race)
+reduced_data2[reduced_data2=="black/african american/negro"]<-"black"
+reduced_data2[reduced_data2=="other asian or pacific islander"]<-"others"
+reduced_data2[reduced_data2=="two major races"]<-"others"
+reduced_data2[reduced_data2=="three or more major races"]<-"others"
+reduced_data2[reduced_data2=="other race, nec"]<-"others"
+reduced_data2[reduced_data2=="american indian or alaska native"]<-"others"
+reduced_data2[reduced_data2=="chinese"]<-"others"
+reduced_data2[reduced_data2=="japanese"]<-"others"
+reduced_data2$sex <- as.character(reduced_data2$sex)
+census <-reduced_data2
+rm(reduced_data2)
+names(census)[names(census)=="sex"]<-"gender"
+census <- census %>% mutate(education=ifelse(educ=="n/a or no schooling"|educ=="grade 5, 6, 7, or 8"|educ=="grade 9",yes="secondary/lower",no=ifelse(educ=="grade 10"|educ=="grade 11"|educ=="grade 12",yes="post-secondary",no="college/higher")))
+census <- subset(census,select=-educ)
+names(reduced_data)[names(reduced_data)=="race_ethnicity"]<-"race"
+reduced_data$vote_2020 <-as.character(reduced_data$vote_2020)
+reduced_data$gender <-as.character(reduced_data$gender)
+reduced_data$race <-as.character(reduced_data$race)
+reduced_data$education <-as.character(reduced_data$education)
+reduced_data$age <- as.numeric(reduced_data$age)
+reduced_data[reduced_data=="Donald Trump"] <-"Trump"
+reduced_data[reduced_data=="Joe Biden"] <-"Biden"
+reduced_data[reduced_data=="I am not sure/don't know"] <-"Unsure/Unknown"
+reduced_data[reduced_data=="I would not vote"] <-"others/not vote"
+reduced_data[reduced_data=="Someone else"] <-"others/not vote"
+reduced_data <- reduced_data %>% mutate(age_group=ifelse(as.numeric(age)<35,yes = "18to34",no=ifelse(as.numeric(age)<51,yes="35to50",no=ifelse(as.numeric(age)<66,yes="51to65",no="66to97"))))
+reduced_data <- subset(reduced_data,select=-age)
+reduced_data[reduced_data=="Black, or African American"] <-"black"
+reduced_data[reduced_data=="Asian (Japanese)"] <-"others"
+reduced_data[reduced_data=="Asian (Chinese)"] <-"others"
+reduced_data[reduced_data=="Asian (Chinese)"] <-"others"
+reduced_data[reduced_data=="Asian (Filipino)"] <-"others"
+reduced_data[reduced_data=="Asian (Asian Indian)"] <-"others"
+reduced_data[reduced_data=="Asian (Korean)"] <-"others"
+reduced_data[reduced_data=="Pacific Islander (Native Hawaiian)"] <-"others"
+reduced_data[reduced_data=="Some other race"] <-"others"
+reduced_data[reduced_data=="American Indian or Alaska Native"] <-"others"
+reduced_data[reduced_data=="Asian (Vietnamese)"] <-"others"
+reduced_data[reduced_data=="Pacific Islander (Guamanian)"] <-"others"
+reduced_data[reduced_data=="Pacific Islander (Other)"] <-"others"
+reduced_data[reduced_data=="Pacific Islander (Samoan)"] <-"others"
+reduced_data[reduced_data=="Asian (Other)"] <-"others"
+reduced_data <- reduced_data %>% mutate(educ=ifelse(education=="Middle School - Grades 4 - 8",yes="secondary/lower",no=ifelse(education=="High school graduate",yes="post-secondary",no="college/higher")))
+survey <- subset(reduced_data, select=-education)
+names(survey)[names(survey)=="educ"]<-"education"
+rm(reduced_data)
+```
+
+```{r}
+varcount3 <-count(survey$age_group)
+ggplot(varcount3,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Age")
+varcount4 <-count(survey$race)
+ggplot(varcount4,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Race")
+varcount5 <-count(survey$education)
+ggplot(varcount5,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Education Level")
+```
+# Post-stratification Dataset
+In order to use MRP, each variable is divided into many levels in order to form small cells which are favorable for model construction. Age(above 18, eligible for voting) is divided in to four age groups. For race ethnicity, all the minorities other than African Americans are simply included into one category, "others". That is to say, there are three classifications in the "race" variable, which respectively "white", "black", and "others". Education level is classified into three categories, "college/higher","post-secondary", and "secondary/lower". The same method is used to process both the survey and the census data, and we get the post-stratification data set on which we will build models. From the plot above(survey) and below, we can find that the there are too many highly-educated people in the survey sample compared with the entire population.
+  Finally, since it is obvious that no one else other than Biden or Trump would win the election, the answers such as "not sure whom to vote for/not vote" will add no explanatory information to the model, we can simply take them away and make our response variable binary (Trump/Biden) We set an new variable "vote_Trump_or_not" to denote participants who vote for Trump as 1 and denote the Biden supports as 0
+
+```{r echo=FALSE, message=FALSE}
+varcount6 <-count(census$age_group)
+ggplot(varcount6,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Age Group")
+varcount7 <-count(survey$race)
+ggplot(varcount7,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Race Ethnicity")
+varcount8 <-count(census$education)
+ggplot(varcount8,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Education Level")
+survey <- survey %>% filter(vote_2020=="Biden"|vote_2020=="Trump")
+survey <- survey %>% mutate(vote_Trump_or_not=ifelse(vote_2020=="Trump",yes=1,no=0))
+survey <- subset(survey, select=-vote_2020)
+```
+
+```{r echo=FALSE, message=FALSE}
+model <- glm(vote_Trump_or_not ~ age_group + education + gender + race, data = survey, family = "binomial")
+summary(model)
+```
+
+# Model
+We estimate the data to follow a logistic regression like:
+$$Pr(y_i = 1) = \text{logit}^{-1}\left( \alpha^{age}_{a[i]} + \alpha^{educ}_{e[i]} + \alpha^{gender}_{g[i]} + \alpha^{race}_{r[i]}\right)$$
+where $$y_i = 1$$ when the individual i claims to vote for Trump. The $$\alpha$$s respectively refer to age group, education level group, gender and race group. The notation $$a[i]$$ refers to the age group an participant belongs to in the post-stratification data set. We assume that for each individual, his response to each variable is normally distributed with constant variance. 
+  From the data we find that the category of education level "secondary/lower"contributes very little to the explanatory results but has a higher estimation error in the same time, so we decide to combine it into the category "high_school/lower".
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+survey[survey=="secondary/lower"] <- "high_school/lower"
+survey[survey=="post-secondary"] <- "high_school/lower"
+census[census=="secondary/lower"] <- "high_school/lower"
+census[census=="post-secondary"] <- "high_school/lower"
+model <- glm(vote_Trump_or_not ~ age_group + education + gender + race, data = survey, family = "binomial")
+summary(model)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+census[census=="white"] <-"White"
+census[census=="female"] <-"Female"
+census[census=="male"] <-"Male"
+prob <- predict(model, census, type="response")
+summary(prob)
+ID <- c(1:497338)
+prediction <- tibble(ID, prob)
+prediction %>% ggplot(aes(x="",y=prob))+geom_boxplot()+ggtitle("The Probabilty of voting for Trump")
+```
+
+# Diagonis
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+n <- nrow(survey)
+set.seed(3461) 
+training_indices <- sample(1:n, size=round(0.8*n))  
+train <- survey[training_indices,] 
+test <- survey[-training_indices,]
+train_model <- glm(vote_Trump_or_not ~ age_group + education + gender + race, data = train, family = "binomial")
+test_predict<- predict(train_model,test,type="response")
+id <-c(1:1040)
+summary(test_predict)
+mean(test$vote_Trump_or_not)
+```
+To diagnose the effectiveness of our model, we randomly slice the survey data into two parts: 20% of the data is the test data, and the other 80% is the train model. We build a training model based on the training data using the same method as above, and use this model to predict the test data. The prediction result of the test data is: the average  probability of voting for Trump is 47.466%. In the actual test data, 47.12% of people claim to vote for Trump, which is quite close to the predicted value. It shows that our model is valid.
+
+# Discussion:
+  Among all age groups, young people (less than 35) are most unlikely to vote for Trump. In contrast, middle-aged people (35-50) are most likely to vote for Trump. If other conditions are kept the same (this assumption will be always used in the following discussion), a middle-aged person is 62.5% more likely to vote for Trump than a young person. The number for people from 51 to 65 and people from 66 to 97 are 60.5% and 58.5% respectively.
+  People who receive a lower level of education is more likely to vote for Trump (57.3% higher than that of people who have a college degree or higher).
+  Men are more likely to vote for Trump (60.1% higher than that of women).
+  African American are most unlikely to vote for Trump among all races. If a person is white, it will increase his probability of voting for Trump by 89.3% compared with a black person).
+  
+  The prediction result shows that among all 497338 observations in the census data, the mean probability of voting for Trump is 49.99%, while the median is 52.68%. This is because even though some people are very unlikely to vote for Trump (very low probability), but most people  show an ambitious attitude to him, so the election is very close and it it hard to forecast the final result. In the survey sample, the proportion of poorly-educated people is much lower than that in the entire population, so the supporting rate for Trump is under-estimated.
+  
+  
+# Weakness
+  The result of a presidential election is not directly determined by the number of national votes, but is determined by the result in each state. That is to say, a candidate winning more than half votes could still lose the election. For simplicity, this report does not consider the situation in each state, which will negatively influence the effectiveness of the final prediction.
+  Also, the classification of "cells" in the post-stratification part is not fine enough. For example, all white people, regardless of Hispanic or not, are simple included into one category. However, Hispans can have a very different voting tendency compared with European whites. 
+Finally, the predictor variables are too few (only four are used). The nature of voters is very complex, and cannot be included in only four variables.
+
+
+References:
+Democracy Fund and Voter Group Study(2020 September). "Nationscape Data Set".  https://www.voterstudygroup.org/publication/nationscape-data-set
+Ruggles, S. et al. (2020) ‘IPSUM USA data extract’. Minneapolis, MN: IPUMS USA, (PUMS USA: Version 10.0 [dataset]). doi: https://doi.org/10.18128/D010.V10.0.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+citation()
+```
+
