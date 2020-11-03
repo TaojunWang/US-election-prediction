@@ -1,9 +1,13 @@
 ---
-title: "2020 US presidential election prediction"
-author: "Taojun Wang"
-date: "2020/11/1"
-output: pdf_document
+title: "Trump Is Expected To Win 2020 Election By A Small Margin Like 2016"
+author: "Taojun Wang, Biwei Zheng, Lingrui Lyu, Yu Yuan"
+date: "2020/11/02"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
 ---
+Code and data supporting this analysis is available at: https://github.com/TaojunWang/US-election-prediction/blob/main/final%20work.Rmd 
 
 ```{r setup, include=FALSE,message=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -16,30 +20,66 @@ library(plyr)
 library(scales)
 ```
 # Abstract
-This report is aimed to predict the result of 2020 US presidential election. We use multilevel regression of post-stratification to process the survey day from nearly 7000 participants and build a logistic model based on it. We use the model to deal with the US census data, and find that the election is very close (Trump is expected to get 49%-52% of all votes).
 
-# Background Introduction:
-  Forecasting the US presidential elections is always a meaningful endeavor owing to America's important status in the world. Therefore, every election period in the country does not only attracts domestic but also international attention. In 2016, Donald Trump made an inconceivable triumph in the election when most polls and statistical analysis considered him as an underdog, and people want to know whether Joe Biden could beat him this time. In this case, through understanding the performance and opinions of the general public, it would be possible to determine the candidate that is most likely to win the elections. This report is based on evaluating and presenting a forecast on the candidate that will win the 2020 elections.
+This report is aimed to predict the result of 2020 US presidential election. We are trying to use ACS data that was collected from survey to predict the probability of Trump or Biden winning the 2020 election. We use multilevel regression with post-stratification to process the survey data from nearly 7000 participants and build a logistic model based on it. We use the model to deal with the US census data, and find that the election result is expected to be very very close. We expect Trump to won 49.99% - 52.68% of the votes, based on the range of mean and median of our model prediction.
+
+Keywords: multilevel regression with post-stratification 
+
+# Introduction:
+
+  Trump is the most mentioned man in 2020. Every thing he says or every tweet he sends make headlines since he assumed office in 2016. Tomorrow is another day of history that this year has marked, while the new president-elect will not only lead the largest nation in the universe for four more years, but will permenately change the international structure. If Trump wins, U.S. will likely to stay in the mud of COVID-19 through this year and well into 2021; Issues between republicans and democrates will become more divided, and U.S. will further alienated from global cooperation and step further into trade protectionism. If Biden wins, we think there's an high probability that Trump will refuse to give in power and start a unprecedented supreme court battle and drag U.S. into another constitutional crisis. None the less, we are trying to predict who will win ahead of the big day.
+  
+  Forecasting the US presidential elections is always a meaningful endeavor owing to America's important status in the world, and every election period in the country attracts both domestic and international attention. In 2016, Donald Trump made an inconceivable triumph in the election when most polls and statistical analysis considered him as an underdog, and people want to know whether Joe Biden could beat him this time. In this case, through understanding the performance and opinions of the general public, it would be possible to determine the candidate that is most likely to win the elections. This report is based on evaluating and presenting a forecast on the candidate that will win the 2020 elections.
+  
+  
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-setwd('C:/Users/wangt/Desktop/sta304/ps4/draft/forecasting')
-raw_data <- read_dta("inputs/data/ns20200625.dta")
+#Input raw data from dataset
+setwd('/Users/zhengbiwei/Desktop/forecasting')
+raw_data <- read_dta("/Users/zhengbiwei/Desktop/forecasting/inputs/data/ns20200625.dta")
 raw_data <- labelled::to_factor(raw_data)
 reduced_data <- raw_data %>% select(vote_2020, gender, race_ethnicity,education, age)
-raw_data2 <- read_dta("inputs/data/usa_00001.dta"
+raw_data2 <- read_dta("/Users/zhengbiwei/Desktop/forecasting/inputs/data/usa_00001.dta"
 )
 raw_data2 <- labelled::to_factor(raw_data2)
 reduced_data2 <- raw_data2 %>% select(sex, age, race, educ)
 varcount1 <-count(raw_data$vote_2016)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
 ggplot(varcount1,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("2016 election")
+
+```
+
+From the 2016 election pie chart above we can see that Trump and Cliton were very very close in terms of votes, accroding to our survey data. This is what we want because the survey data matches the reality of 2016 election result, thus the population of our survey is generally not biased towards republicans or democrats. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 varcount2 <-count(raw_data$vote_2020)
 ggplot(varcount2, aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("2020 election survey")
+
+```
+
+The raw data shows that votes for Biden is slightly more than votes for Trump. But comparing to the pie chart above, we can clearly see that in 2020 people are more motivated to vote either Trump or Biden, and there's a lot less of "I won't vote" or "Someone else". The situation now is more polarized than 2016.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 raw_data %>% ggplot(aes(x=age))+geom_histogram(bins = 100, colour = "black", fill = "grey")+ labs(title = "Age of participants in the survey")
+```
+
+The histogram is distributed with a few peaks: age 19, age 39 and age 68. It also has a tail on the right, which make sense as high age seniors over 75 has less population and are less likely to vote or take survey. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 table(raw_data$race_ethnicity)
 table(raw_data$education)
 raw_data %>% ggplot(aes(x=gender))+geom_bar()+labs(title = "Gender of participants in the survey")
 ```
+
+The gender of participants in the survey shows a slight female over male in population size. Even though this is contrary to reality where male population is slightly over female's population, this is within our acceptable margin of error. 
+
+
 # Survey Data
-The data analysis of this report will be based on the survey data collected by Democracy Fund and UCLA Nationscape from 6479 participants. The data was collected through 24 weeks in the first half of 2020 fielded by a market research platform called Lucid (Nationscape Data Set, September 2020). The full data set includes 265 variables, and five of them will be taken into consideration in this report to simplify our analysis . The variable vote_2020 will be used as the response variable, which is the candidates participants claim to vote for in the survey. The predictor variables in use will include age, gender, race ethnicity and education level. 
+
+  The data analysis of this report will be based on the survey data collected by Democracy Fund and UCLA Nationscape from 6479 participants. The data was collected through 24 weeks in the first half of 2020 fielded by a market research platform called Lucid (Nationscape Data Set, September 2020). The full data set includes 265 variables, and five of them will be taken into consideration in this report to simplify our analysis. The variable vote_2020 will be used as the response variable, which is the candidates participants claim to vote for in the survey. The predictor variables in use will include age, gender, race ethnicity and education level. 
+
   It is obvious to find that among the participants people who plan to vote for Biden are more than that who plan to Trump. In terms of participants' age, the plot show a bi-modal characteristics, whether most people are around 40 or 60. Also, most participants have a relatively high education level, half of whom have completed college degree (or higher), which might not be very representative for the entire population. Therefore, this report plans to use multilevel regression with post-stratification (MRP) to predict the final election.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -99,12 +139,26 @@ rm(reduced_data)
 
 ```{r}
 varcount3 <-count(survey$age_group)
-ggplot(varcount3,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Age")
-varcount4 <-count(survey$race)
-ggplot(varcount4,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Race")
-varcount5 <-count(survey$education)
-ggplot(varcount5,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Paricipants' Education Level")
+ggplot(varcount3,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Participants' Age")
 ```
+
+The pie chart of participants' age distribution shows that the three chunks of age range (18-34, 35-50, 51-65) takes approximately the same area with just over a querter. 
+
+```{r}
+varcount4 <-count(survey$race)
+ggplot(varcount4,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Participants' Race")
+```
+
+The participants' race is dominated by white with three quarters. This is consistent with actual U.S. population's race, but we think it's too general. There are a large population of hispanic not shown in the chart. 
+
+```{r}
+varcount5 <-count(survey$education)
+ggplot(varcount5,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("participants' Education Level")
+```
+
+Majority of participants has college or higher education, and it is not consistent with the U.S. population. In 2019, only 35% of male and 36% of female completed four years of college education. We expect that the survey may not fully represent the population with lower education backgrounds, which is majority of the population compares to those with college education. 
+
+
 # Post-stratification Dataset
 In order to use MRP, each variable is divided into many levels in order to form small cells which are favorable for model construction. Age(above 18, eligible for voting) is divided in to four age groups. For race ethnicity, all the minorities other than African Americans are simply included into one category, "others". That is to say, there are three classifications in the "race" variable, which respectively "white", "black", and "others". Education level is classified into three categories, "college/higher","post-secondary", and "secondary/lower". The same method is used to process both the survey and the census data, and we get the post-stratification data set on which we will build models. From the plot above(survey) and below, we can find that the there are too many highly-educated people in the survey sample compared with the entire population.
   Finally, since it is obvious that no one else other than Biden or Trump would win the election, the answers such as "not sure whom to vote for/not vote" will add no explanatory information to the model, we can simply take them away and make our response variable binary (Trump/Biden) We set an new variable "vote_Trump_or_not" to denote participants who vote for Trump as 1 and denote the Biden supports as 0
@@ -112,19 +166,30 @@ In order to use MRP, each variable is divided into many levels in order to form 
 ```{r echo=FALSE, message=FALSE}
 varcount6 <-count(census$age_group)
 ggplot(varcount6,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Age Group")
+```
+
+The post-stratification data set shows an more equally distributed pie chart of the four age ranges. 
+
+```{r echo=FALSE, message=FALSE}
 varcount7 <-count(survey$race)
 ggplot(varcount7,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Race Ethnicity")
+```
+
+The post-stratification data set is approximately the same with the raw data set in terms of race distribution. 
+
+
+```{r echo=FALSE, message=FALSE}
 varcount8 <-count(census$education)
 ggplot(varcount8,aes(x="",y=freq,fill=x))+geom_bar(stat = "identity")+coord_polar(theta = "y")+ggtitle("Population Education Level")
 survey <- survey %>% filter(vote_2020=="Biden"|vote_2020=="Trump")
 survey <- survey %>% mutate(vote_Trump_or_not=ifelse(vote_2020=="Trump",yes=1,no=0))
 survey <- subset(survey, select=-vote_2020)
-```
-
-```{r echo=FALSE, message=FALSE}
 model <- glm(vote_Trump_or_not ~ age_group + education + gender + race, data = survey, family = "binomial")
 summary(model)
 ```
+
+The post-stratification data set is more consistent with reality as it includes more high_school or lower education samples, as opposes to raw data which over 80% of samples are college educated or higher. This makes us more confident in predicting the election result using our post-stratification data. 
+
 
 # Model
 We estimate the data to follow a logistic regression like:
@@ -151,6 +216,8 @@ prediction <- tibble(ID, prob)
 prediction %>% ggplot(aes(x="",y=prob))+geom_boxplot()+ggtitle("The Probabilty of voting for Trump")
 ```
 
+The probability of voting for Trump has a mean of 49.99% and a median of 52.68%. The IQR is from 45.21% to 59.89%. The boxplot shows a normal distribution with a long tail down below, which makes it left-skewed.
+
 # Diagonis
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 n <- nrow(survey)
@@ -172,20 +239,25 @@ To diagnose the effectiveness of our model, we randomly slice the survey data in
   Men are more likely to vote for Trump (60.1% higher than that of women).
   African American are most unlikely to vote for Trump among all races. If a person is white, it will increase his probability of voting for Trump by 89.3% compared with a black person).
   
-  The prediction result shows that among all 497338 observations in the census data, the mean probability of voting for Trump is 49.99%, while the median is 52.68%. This is because even though some people are very unlikely to vote for Trump (very low probability), but most people  show an ambitious attitude to him, so the election is very close and it it hard to forecast the final result. In the survey sample, the proportion of poorly-educated people is much lower than that in the entire population, so the supporting rate for Trump is under-estimated.
+  The prediction result shows that among all 497338 observations in the census data, the mean probability of voting for Trump is 49.99%, while the median is 52.68%. This is because even though some people are very unlikely to vote for Trump (very low probability), most people shows an ambitious attitude to him, so the election is very close and it it hard to forecast the final result. In the survey sample, the proportion of poorly-educated people is much lower than that in the entire population, so the supporting rate for Trump is under-estimated.
   
   
 # Weakness
-  The result of a presidential election is not directly determined by the number of national votes, but is determined by the result in each state. That is to say, a candidate winning more than half votes could still lose the election. For simplicity, this report does not consider the situation in each state, which will negatively influence the effectiveness of the final prediction.
-  Also, the classification of "cells" in the post-stratification part is not fine enough. For example, all white people, regardless of Hispanic or not, are simple included into one category. However, Hispans can have a very different voting tendency compared with European whites. 
-Finally, the predictor variables are too few (only four are used). The nature of voters is very complex, and cannot be included in only four variables.
+  The result of a presidential election is not directly determined by the number of national votes, but is determined by the of the electoral college in each state. That is to say, a candidate winning more than half votes could still lose the election. One famous example is 2016, when Cliton won more votes but Trump still won the election. For simplicity, this report does not consider the electoral college, which will negatively influence the effectiveness of the final prediction. We recognize that this is a issue in real world practice, as the most accurate prediction should be for each states and then combine the results of states to output the expected result of the 2020 election. But, for time and effort's sake, we didn't make it that far. 
+  
+  Also, the classification of "cells" in the post-stratification part is not fine enough. For example, all white people, regardless of Hispanic or not, are simply included into one category. However, Hispanics can have a very different voting tendency compared with European whites. 
+
+  Finally, the predictor variables are too little (only four are used). The nature of voters is very complex, and cannot be included in only four variables. This simplicity can greatly affect our prediction's precision.
 
 
-References:
+# References:
 Democracy Fund and Voter Group Study(2020 September). "Nationscape Data Set".  https://www.voterstudygroup.org/publication/nationscape-data-set
 Ruggles, S. et al. (2020) ‘IPSUM USA data extract’. Minneapolis, MN: IPUMS USA, (PUMS USA: Version 10.0 [dataset]). doi: https://doi.org/10.18128/D010.V10.0.
-
+Statista, Percentage of the U.S. population who have completed four years of college or more from 1940 to 2019, by gender. https://www.statista.com/statistics/184272/educational-attainment-of-college-diploma-or-higher-by-gender/
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 citation()
 ```
 
+# Codes
+Code supporting this analysis can be found at 
+https://github.com/TaojunWang/US-election-prediction/blob/main/final%20work.Rmd
